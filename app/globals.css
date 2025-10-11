@@ -1,0 +1,19 @@
+@layer base {
+  body {
+    font-family: "Figtree", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Figtree", sans-serif;
+    font-weight: 600;
+  }
+
+  .font-figtree {
+    font-family: "Figtree", sans-serif;
+  }
+}
