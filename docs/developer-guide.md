@@ -26,7 +26,8 @@ pnpm install
 pnpm dev        # → http://localhost:3000
 
 # 4. production check
-pnpm build && pnpm start
+pnpm build                       # static export → out/
+npx serve out                    # serve the export locally
 ```
 
 No `.env` file, no database, no API keys — `pnpm dev` just works.
@@ -45,27 +46,26 @@ animated-clean-toast-carousel/
 ├── app/
 │   ├── layout.tsx        # root layout: Figtree font, <html>/<body>, metadata
 │   ├── page.tsx          # "/" route — renders <Demo /> (client component)
-│   └── globals.css       # LIVE stylesheet: Figtree base styles + .font-figtree
+│   └── globals.css       # LIVE stylesheet: @tailwind directives, shadcn theme
+│                           # vars (:root/.dark), Figtree base styles
 ├── components/
 │   └── theme-provider.tsx# next-themes wrapper — NOT mounted (dead code today)
 ├── lib/
 │   └── utils.ts          # cn() class helper — NOT imported anywhere yet
 ├── public/               # static assets (placeholder images)
-├── styles/
-│   └── globals.css       # shadcn theme (CSS vars, .dark) — NOT imported today
 ├── docs/                 # ← you are here
 │   ├── environment-and-configuration.md
 │   ├── third-party-integrations.md
 │   └── developer-guide.md
 ├── .env.example          # env template (project needs zero vars today)
 ├── animated-toast.tsx    # toast UI: AnimatedToast + ToastContainer
-├── app-card.tsx          # UNUSED dark card variant (see §7)
 ├── carousel.tsx          # scroll-snap carousel + nav buttons
 ├── carousel-card.tsx     # light card used inside the carousel
 ├── demo.tsx              # demo page: 12 flowers/saints items + providers
 ├── toast-context.tsx     # toast state: ToastProvider + useToast()
 ├── components.json       # shadcn/ui configuration
-├── next.config.mjs       # Next.js config
+├── eslint.config.mjs      # ESLint flat config (next/core-web-vitals + TS)
+├── next.config.mjs       # Next.js config (lint + typecheck enforced in builds)
 ├── package.json
 ├── pnpm-lock.yaml
 ├── postcss.config.mjs
@@ -105,7 +105,10 @@ interface Toast { id: number; message: string; type: ToastType }
 ```
 
 - `ToastProvider` holds `toasts: Toast[]` in `useState`.
-- `addToast(message, type)` appends `{ id: Date.now(), message, type }`.
+- `addToast(message, type)` appends `{ id, message, type }` where `id` comes
+  from a monotonic counter (`useRef`) — `Date.now()` was replaced on
+  27 Sep 2026 because same-millisecond toasts shared an id (key collision,
+  wrong toast dismissed).
 - `removeToast(id)` filters by id.
 - `useToast()` throws if called outside the provider — mount order matters.
 
@@ -113,8 +116,9 @@ interface Toast { id: number; message: string; type: ToastType }
 
 1. `ToastContainer` (fixed `bottom-4 right-4 z-50`) maps `toasts` inside
    `<AnimatePresence>` so exit animations play.
-2. Each `AnimatedToast` starts a **3-second `setTimeout`** on mount, then
-   calls `removeToast(id)` → `AnimatePresence` plays the exit animation.
+2. Each `AnimatedToast` starts an auto-dismiss `setTimeout` on mount
+   (default 3000 ms, configurable via the `duration` prop), then calls
+   `removeToast(id)` → `AnimatePresence` plays the exit animation.
 3. Animation spec (framer-motion spring):
    - enter: `opacity 0→1, y 50→0, scale 0.3→1`
    - exit: `opacity →0, y →20, scale →0.5`
@@ -122,13 +126,12 @@ interface Toast { id: number; message: string; type: ToastType }
 4. Icon + color per type: `flower → Flower/pink-500`, `saint → Cross/indigo-500`,
    `warning → AlertTriangle/yellow-500`, `info → Info/blue-500`.
 
-**Known quirks:**
+**Known quirks (fixed 27 Sep 2026):**
 
-- `id: Date.now()` — two toasts created within the same millisecond share an
-  id; `removeToast` would dismiss both, and React keys would collide. Use a
-  counter or `crypto.randomUUID()` if you fire toasts in bursts.
-- Dismissal is **not pausable** on hover and has no manual close button.
-  Easy to add: render an `X` button calling `removeToast(id)`.
+- Toast ids were `Date.now()` — same-millisecond toasts shared an id.
+  Replaced with a monotonic `useRef` counter.
+- Dismissal was not pausable on hover and had no manual close button.
+  An `X` button calling `removeToast(id)` was added (with `aria-label`).
 
 ### 3.2 Carousel
 
@@ -145,13 +148,13 @@ interface Toast { id: number; message: string; type: ToastType }
 - Cards: `AppCard` from `carousel-card.tsx` — `w-64 h-72`, light theme,
   `whileHover={{ y: -5 }}` lift + `whileTap={{ scale: 0.95 }}` press.
 
-**Known quirks:**
+**Known quirks (fixed 27 Sep 2026):**
 
-- `useEffect(..., [carouselRef.current])` — putting a ref's `.current` in the
-  dep array is an anti-pattern (React docs discourage it); it works here
-  because the ref is set before effects run, but the scroll listener is only
-  attached once. The `updateScrollButtons` initial state isn't called on mount
-  either, so `canScrollRight` starts `true` even for short lists.
+- The effect previously depended on `carouselRef.current` (anti-pattern —
+  refs don't trigger re-renders; `exhaustive-deps` flags it) and the initial
+  button state was never computed on mount. Now `updateScrollButtons` is a
+  `useCallback`, the effect runs once on mount (+ on `items.length` change),
+  and a `resize` listener keeps the arrows correct on viewport changes.
 - No drag/swipe momentum beyond native scroll, no autoplay, no looping —
   fine for a demo; reach for `embla-carousel-react` (already installed) for
   production needs.
@@ -203,8 +206,8 @@ No other changes needed — the carousel maps the array.
 
 ### 4.4 Enable dark mode
 
-1. Import the theme CSS in `app/layout.tsx`: `import "../styles/globals.css"`
-   (or merge its `:root`/`.dark` blocks into `app/globals.css`).
+1. The theme CSS is already merged into `app/globals.css` (`:root`/`.dark`
+   blocks came from the old `styles/globals.css`, deleted 27 Sep 2026).
 2. Mount the provider (see [Third-Party Integrations](./third-party-integrations.md#️⃣-next-themes-044--installed-provider-written-not-mounted)).
 3. Toggle with `useTheme()` from `next-themes`.
 
@@ -222,10 +225,17 @@ import { cn } from "@/lib/utils"
 
 ```bash
 pnpm dev     # dev server + Fast Refresh
-pnpm build   # → .next/ (skips ESLint & tsc per next.config.mjs)
-pnpm start   # serve production build on :3000
-pnpm lint    # ESLint (works even though builds skip it)
+pnpm build   # → out/ static export (runs ESLint + tsc; both must pass)
+pnpm lint    # eslint . (flat config in eslint.config.mjs)
+npx serve out  # serve the static export locally
 ```
+
+> `next start` does not work with `output: "export"` — there is no Node
+> server; serve `out/` with any static file server.
+
+**Deploy to Cloudflare Pages** (current live host): `pnpm build`, then
+upload `out/` (dashboard or `wrangler pages deploy out`).
+Live: https://animated-clean-toast-carousel.pages.dev
 
 **Deploy to Vercel** (the project's original host):
 
@@ -244,35 +254,39 @@ is already set, so no image-optimization config is needed.
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| Toast styles missing in production | Root-level `.tsx` files not in Tailwind `content` — verify the `'*.{js,ts,jsx,tsx,mdx}'` glob in `tailwind.config.ts` |
-| `bg-background` / `text-primary` do nothing | `styles/globals.css` (CSS vars) isn't imported — import it in `app/layout.tsx` |
+| Toast styles missing in production | Was missing `@tailwind` directives in `app/globals.css` — fixed 27 Sep 2026 (directives + shadcn theme merged in, `styles/` deleted) |
+| `bg-background` / `text-primary` do nothing | Fixed — the shadcn CSS variables now live in `app/globals.css` (`:root`/`.dark`) |
 | `useToast must be used within a ToastProvider` | Component rendered outside `<ToastProvider>` in `demo.tsx` — check tree order |
 | Hydration warning after adding next-themes | Add `suppressHydrationWarning` to `<html>` |
-| `next lint` reports errors but build passes | Expected — `ignoreDuringBuilds: true`; fix or flip the flag |
-| Two toasts vanish together | `Date.now()` id collision — use unique ids (§3.1) |
+| `next lint` reports errors but build passes | No longer possible — builds run ESLint + tsc and fail on errors (strict since 27 Sep 2026) |
+| Two toasts vanish together | Was `Date.now()` id collision — fixed with a monotonic counter (§3.1) |
 | `pnpm install` slow / huge `node_modules` | 27 unused Radix packages + more — prune per [Third-Party Integrations](./third-party-integrations.md#7-installed-but-completely-unused-cleanup-candidates) |
 
 ---
 
 ## 7. Tech debt & cleanup suggestions
 
-Numbered by impact; safe to tackle in any order:
+Numbered by impact; safe to tackle in any order. Items marked ✅ were fixed
+during the 27 Sep 2026 audit:
 
-1. **Delete or rename `app-card.tsx`** — dead dark-variant card; `carousel.tsx`
-   uses `carousel-card.tsx`. Two exported `AppCard`s is a trap.
-2. **Import or delete `styles/globals.css`** — the shadcn theme is currently inert.
+1. ✅ **Delete or rename `app-card.tsx`** — deleted; `carousel.tsx` uses
+   `carousel-card.tsx`.
+2. ✅ **Import or delete `styles/globals.css`** — merged into `app/globals.css`
+   (this also fixed the missing `@tailwind` directives — utilities were never
+   generated before).
 3. **Mount or delete `components/theme-provider.tsx`** — same story for theming.
 4. **Prune unused dependencies** — see the removal list in
    [Third-Party Integrations](./third-party-integrations.md#7).
-5. **Re-enable build checks** — set `ignoreDuringBuilds` / `ignoreBuildErrors`
-   to `false` in `next.config.mjs` and fix the reported issues (start with the
-   `carouselRef.current` dep-array warning).
-6. **Register `autoprefixer`** in `postcss.config.mjs` (it's installed but idle).
+5. ✅ **Re-enable build checks** — `ignoreDuringBuilds` / `ignoreBuildErrors`
+   flipped to `false`; the strict build immediately caught a real
+   `LucideIcon` type error in `carousel.tsx` (fixed by tightening
+   `CarouselProps`).
+6. ✅ **Register `autoprefixer`** in `postcss.config.mjs`.
 7. **Move root components** (`carousel.tsx`, `demo.tsx`, …) into
    `components/` and switch imports to `@/` aliases for a conventional layout.
 8. **Rename package** `my-v0-project` → `animated-clean-toast-carousel`.
-9. **Unique toast ids** — replace `Date.now()` with a counter/`randomUUID()`.
-10. **Add a close button + pause-on-hover** to toasts for accessibility.
+9. ✅ **Unique toast ids** — `Date.now()` replaced with a monotonic counter.
+10. ✅ **Add a close button** to toasts — done; pause-on-hover still open.
 
 ---
 

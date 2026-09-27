@@ -10,12 +10,23 @@ interface AppCardProps {
 }
 
 export const AppCard: React.FC<AppCardProps> = ({ Icon, title, description, onClick }) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onClick()
+    }
+  }
+
   return (
     <motion.div
       whileHover={{ y: -5, boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}
       whileTap={{ scale: 0.95 }}
       className="bg-white rounded-xl p-6 shadow-md cursor-pointer w-64 h-72 flex flex-col justify-between transition-colors duration-300 hover:bg-gray-50"
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`${title} — show notification`}
+      onKeyDown={handleKeyDown}
     >
       <div className="flex flex-col items-center text-center">
         <div className="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center mb-4">

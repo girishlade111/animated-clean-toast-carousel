@@ -1,11 +1,11 @@
 # Animated Clean Toast Carousel
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.2.4-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.2.6-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Framer Motion](https://img.shields.io/badge/Framer_Motion-spring-FF0080?style=for-the-badge&logo=framer&logoColor=white)](https://motion.dev/)
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/gileb64375-5584s-projects/v0-animated-clean-toast-carousel)
+[![Live on Cloudflare Pages](https://img.shields.io/badge/Live-Cloudflare_Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://animated-clean-toast-carousel.pages.dev)
 
 A polished, animation-first UI demo: a **spring-physics toast notification
 system** paired with a **scroll-snap card carousel**, built with Next.js 15,
@@ -32,7 +32,8 @@ toast system and carousel are fully generic and reusable.
 - **🌀 Spring-physics motion** — Framer Motion springs
   (`stiffness: 500, damping: 40`) for enter/exit; `AnimatePresence` keeps exit
   animations smooth when toasts dismiss.
-- **⏱️ Auto-dismiss** — toasts self-remove after 3 seconds (configurable).
+- **⏱️ Auto-dismiss** — toasts self-remove after 3 seconds (configurable
+  via the `duration` prop), with a manual ✕ close button.
 - **🎠 Snap carousel** — horizontal scroll-snap track, hidden scrollbars,
   auto-appearing glassmorphism nav arrows, smooth half-viewport scrolling.
 - **🃏 Interactive cards** — hover lift (`y: -5`) and tap press
@@ -84,9 +85,18 @@ Open **http://localhost:3000** — click any card and watch the toasts.
 | Script | Command | Purpose |
 |--------|---------|---------|
 | `pnpm dev` | `next dev` | Dev server with Fast Refresh |
-| `pnpm build` | `next build` | Production build → `.next/` |
-| `pnpm start` | `next start` | Serve the production build |
-| `pnpm lint` | `next lint` | ESLint |
+| `pnpm build` | `next build` | Static export → `out/` (see `output: "export"` in `next.config.mjs`) |
+| `pnpm lint` | `eslint .` | ESLint (flat config, Next 15 rules via `eslint-config-next@15.2.4`) |
+
+Serve the static export locally with any static file server, e.g.:
+
+```bash
+pnpm build && npx serve out
+# or: python3 -m http.server 3000 --directory out
+```
+
+> `pnpm start` / `next start` do **not** work with `output: "export"` —
+> there is no Node server in a static export; serve `out/` instead.
 
 No environment variables are needed. If you add an integration that needs
 them, copy `.env.example` → `.env.local` and follow the conventions
@@ -100,14 +110,12 @@ documented in [Environment & Configuration](./docs/environment-and-configuration
 ├── app/
 │   ├── layout.tsx        # root layout — Figtree font, metadata
 │   ├── page.tsx          # "/" route → <Demo />
-│   └── globals.css       # live stylesheet (Figtree base + .font-figtree)
+│   └── globals.css       # live stylesheet: @tailwind, shadcn vars, Figtree
 ├── components/
 │   └── theme-provider.tsx# next-themes wrapper (not mounted yet)
 ├── lib/
 │   └── utils.ts          # cn() class-name helper
 ├── public/               # static assets
-├── styles/
-│   └── globals.css       # shadcn theme variables (not imported yet)
 ├── docs/
 │   ├── developer-guide.md
 │   ├── environment-and-configuration.md
@@ -117,7 +125,6 @@ documented in [Environment & Configuration](./docs/environment-and-configuration
 ├── carousel.tsx          # scroll-snap carousel + nav arrows
 ├── carousel-card.tsx     # card used by the carousel
 ├── demo.tsx              # demo page: 12 items + providers
-├── app-card.tsx          # unused dark card variant
 ├── components.json       # shadcn/ui config
 ├── next.config.mjs       # Next.js config
 ├── tailwind.config.ts    # Tailwind theme (CSS-var palette)
@@ -171,9 +178,8 @@ icon/color entry in `animated-toast.tsx`, then `addToast("Saved!", "success")`.
 **Add carousel items** — append to the `items` array in `demo.tsx`
 (icon + title + description + `action`).
 
-**Theme the app** — edit the HSL CSS variables in `styles/globals.css`
-(`:root` / `.dark`), import the file in `app/layout.tsx`, and mount the
-`ThemeProvider` for class-based dark mode.
+**Theme the app** — edit the HSL CSS variables in `app/globals.css`
+(`:root` / `.dark`) and mount the `ThemeProvider` for class-based dark mode.
 ([guide](./docs/developer-guide.md#44-enable-dark-mode))
 
 **Scaffold shadcn components** — `pnpm dlx shadcn@latest add button`
@@ -196,30 +202,41 @@ icon/color entry in `animated-toast.tsx`, then `addToast("Saved!", "success")`.
 
 ## ☁️ Deployment
 
-**Vercel** (recommended — the project's original host):
+The project builds to a **fully static export** (`out/`), so it runs on any
+static host — no Node server, no env vars.
+
+**Cloudflare Pages** (current live host):
+
+```bash
+pnpm build   # → out/
+# then upload out/ via the Pages dashboard or wrangler pages deploy
+```
+
+Live: https://animated-clean-toast-carousel.pages.dev
+
+**Vercel** (the project's original host) also works — `output: "export"`
+is honored there too:
 
 ```bash
 pnpm dlx vercel --prod
 ```
 
 or connect the repo in the Vercel dashboard for auto-deploys on push to
-`main`. No environment variables required. `images.unoptimized: true` is
-already set, so no image-optimization config is needed.
-
-The live demo: https://vercel.com/gileb64375-5584s-projects/v0-animated-clean-toast-carousel
+`main`. `images.unoptimized: true` is already set, so no
+image-optimization config is needed.
 
 ---
 
 ## ⚠️ Known limitations
 
-- **Dead code ships with the template:** `app-card.tsx` (duplicate card),
-  `styles/globals.css` (unimported theme), `components/theme-provider.tsx`
-  (unmounted), and ~40 installed-but-unused packages (Radix suite, Sonner,
-  Embla, …). See [cleanup candidates](./docs/third-party-integrations.md#7-installed-but-completely-unused-cleanup-candidates).
-- **Builds skip lint and type checks** (`next.config.mjs`) — flip the flags
-  for production hardening.
-- **Toast ids use `Date.now()`** — can collide under burst firing.
-- **No close button / pause-on-hover** on toasts yet.
+- **Template leftovers:** `components/theme-provider.tsx` (unmounted) and
+  ~40 installed-but-unused packages (Radix suite, Sonner, Embla, …). The
+  27 Sep 2026 audit already deleted `app-card.tsx`, merged
+  `styles/globals.css` into `app/globals.css`, and flipped builds to strict.
+  See [cleanup candidates](./docs/third-party-integrations.md#7-installed-but-completely-unused-cleanup-candidates).
+- **Builds enforce lint and type checks** (`next.config.mjs` — strict since
+  the 27 Sep 2026 audit).
+- **No pause-on-hover** on toasts yet (close button added 27 Sep 2026).
 
 The full tech-debt list with fixes is in the
 [Developer Guide](./docs/developer-guide.md#7-tech-debt--cleanup-suggestions).

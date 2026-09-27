@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useCallback } from "react"
+import { createContext, useContext, useState, useCallback, useRef } from "react"
 
 type ToastType = "flower" | "saint" | "warning" | "info"
 
@@ -29,9 +29,14 @@ export const useToast = () => {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([])
+  // Monotonic counter — Date.now() can collide when toasts fire in the same
+  // millisecond, which breaks React keys and dismisses the wrong toast.
+  const idRef = useRef(0)
 
   const addToast = useCallback((message: string, type: ToastType) => {
-    setToasts((prevToasts) => [...prevToasts, { id: Date.now(), message, type }])
+    idRef.current += 1
+    const id = idRef.current
+    setToasts((prevToasts) => [...prevToasts, { id, message, type }])
   }, [])
 
   const removeToast = useCallback((id: number) => {

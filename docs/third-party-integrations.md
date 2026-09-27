@@ -41,7 +41,6 @@ The heart of the "animated" in the project name. Used in 4 files:
 | `animated-toast.tsx` | `motion.div` enter/exit spring (`stiffness: 500, damping: 40`), `AnimatePresence` for the toast stack |
 | `carousel.tsx` | `motion.div` scroll container, `motion.button` fade for nav arrows wrapped in `AnimatePresence` |
 | `carousel-card.tsx` | `whileHover={{ y: -5, boxShadow: … }}`, `whileTap={{ scale: 0.95 }}` |
-| `app-card.tsx` | `whileHover={{ scale: 1.05 }}`, `whileTap={{ scale: 0.95 }}` (file currently unused — see §6) |
 
 **Tuning guide** (in `animated-toast.tsx`):
 
@@ -66,7 +65,7 @@ Icon set. Used in 5 files:
 - `demo.tsx` — 12 icons for carousel cards: `Flower, Cross, Sun, Moon, Cloud, Umbrella, Wind, Snowflake, Rainbow, Zap, Heart, Star`.
 - `animated-toast.tsx` — per-type icons: `flower → Flower`, `saint → Cross`, `warning → AlertTriangle`, `info → Info`.
 - `carousel.tsx` — `ChevronLeft`, `ChevronRight` for nav buttons.
-- `carousel-card.tsx` / `app-card.tsx` — `LucideIcon` type for the `Icon` prop.
+- `carousel-card.tsx` — `LucideIcon` type for the `Icon` prop (tightened 27 Sep 2026; `carousel.tsx` previously passed `React.ElementType`, a real type error).
 
 Tree-shaken by the bundler; importing individual icons is the correct pattern.
 Docs: https://lucide.dev.
@@ -111,9 +110,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 
 `suppressHydrationWarning` is required because next-themes mutates the class
 attribute on hydration. `tailwind.config.ts` already uses `darkMode: ['class']`
-and `styles/globals.css` already defines the `.dark` variable set — the only
-missing piece is mounting the provider (and importing `styles/globals.css`,
-see [Environment & Configuration](./environment-and-configuration.md#6-postcssconfigmjs)).
+and `app/globals.css` already defines the `.dark` variable set (merged from
+the old `styles/globals.css` on 27 Sep 2026) — the only missing piece is
+mounting the provider.
 
 ### ✅ clsx `^2.1.1` + tailwind-merge `^2.5.5` — `cn()` helper
 
@@ -179,9 +178,10 @@ under Analytics. Free tier included with any Vercel project.
 ### ❌ geist `^1.3.1`
 
 Vercel's Geist font as an npm package (`geist/font/sans`, `geist/font/mono`).
-The project uses **Figtree** via `next/font/google` instead; `styles/globals.css`
-references `var(--font-geist-sans)` / `var(--font-geist-mono)` but that file
-isn't imported, so Geist never loads. Either wire it:
+The project uses **Figtree** via `next/font/google` instead; the merged
+`app/globals.css` references `var(--font-geist-sans)` / `var(--font-geist-mono)`
+in `:root`, but those variables are never defined, so Geist never loads.
+Either wire it:
 
 ```tsx
 import { GeistSans } from "geist/font/sans"
@@ -192,15 +192,13 @@ import { GeistSans } from "geist/font/sans"
 
 ---
 
-## 6. Dead / duplicate component files (not packages, but integration-relevant)
+## 6. Dead / duplicate component files — resolved 27 Sep 2026
 
-- **`app-card.tsx`** — a *second* `AppCard` variant (dark iOS-style,
-  `bg-[#1c1c1e]`). Nothing imports it; `carousel.tsx` imports `AppCard` from
-  `./carousel-card` (light card, `w-64 h-72`). Keeping both invites confusion —
-  delete `app-card.tsx` or rename it (`dark-app-card.tsx`) if you plan to use it.
-- **`styles/globals.css`** — the full shadcn theme (CSS vars, `.dark` set,
-  `@tailwind` directives). Not imported anywhere; `app/layout.tsx` imports
-  `app/globals.css` instead. See §3 for how to activate it.
+- **`app-card.tsx`** — was a *second* `AppCard` variant (dark iOS-style,
+  `bg-[#1c1c1e]`); nothing imported it. **Deleted.**
+- **`styles/globals.css`** — was the full shadcn theme, unimported.
+  **Merged into `app/globals.css`** (which also gained the missing `@tailwind`
+  directives) and the `styles/` directory was deleted.
 
 ---
 
@@ -247,7 +245,7 @@ After removing, delete the now-dangling `pnpm-lock.yaml` entries with
 ## 8. Integration checklist for new work
 
 - [ ] Need page analytics? → mount `<Analytics />` (§4).
-- [ ] Need dark mode? → mount `ThemeProvider` + import `styles/globals.css` (§3).
+- [ ] Need dark mode? → mount `ThemeProvider` (§3). The `.dark` variable set is already in `app/globals.css`.
 - [ ] Need shadcn primitives? → `pnpm dlx shadcn@latest add <component>` (aliases in `components.json`).
 - [ ] Need toasts elsewhere? → reuse `ToastProvider`/`useToast` — don't add Sonner alongside the custom system; pick one.
 - [ ] Need a "real" carousel (looping, autoplay, drag physics)? → consider wiring `embla-carousel-react` (§7) instead of extending the hand-rolled one.

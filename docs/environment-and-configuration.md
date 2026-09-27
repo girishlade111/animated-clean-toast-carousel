@@ -82,9 +82,12 @@ On Vercel, set these in **Project → Settings → Environment Variables**
 | Script  | Command      | What it does |
 |---------|--------------|--------------|
 | `dev`   | `next dev`   | Dev server with Fast Refresh at http://localhost:3000 |
-| `build` | `next build` | Production build (`.next/`) — type-checks and lints unless disabled (see §3) |
-| `start` | `next start` | Serves the production build |
-| `lint`  | `next lint`  | ESLint over the project (Next.js 15 still ships `next lint`; deprecated in v16) |
+| `build` | `next build` | Static export (`out/`) — type-checks and lints unless disabled (see §3) |
+| `lint`  | `eslint .` | ESLint flat config (`eslint.config.mjs`, Next 15 rules via `eslint-config-next@15.2.4` + FlatCompat); builds run it too (§3.1) |
+
+> No `start` script is useful here: `output: "export"` produces a static
+> `out/` directory with no Node server — serve it with any static file
+> server (`npx serve out`).
 
 ### 2.2 Package manager
 
@@ -107,11 +110,13 @@ nothing enforces pnpm — consider adding `"packageManager": "pnpm@9.x"` to
 ```js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lint and type errors fail the build on purpose — they caught real bugs
+  // (e.g. the LucideIcon mismatch in carousel.tsx). Keep these strict.
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,
@@ -121,22 +126,18 @@ const nextConfig = {
 export default nextConfig
 ```
 
-### 3.1 `eslint.ignoreDuringBuilds: true`
+### 3.1 `eslint.ignoreDuringBuilds: false` (strict since 27 Sep 2026)
 
-`next build` skips ESLint. **Why it exists here:** v0-generated projects turn
-this on so generated code never blocks a deploy.
+`next build` runs ESLint and fails on errors. Previously `true` (the v0
+default), which let real issues ship silently — e.g. `carousel.tsx`
+`useEffect(..., [carouselRef.current])` violating `exhaustive-deps`. The
+2026-09-27 audit flipped it to `false` and fixed every reported issue.
 
-**Trade-off:** lint errors (unused vars, `react-hooks/exhaustive-deps`, …)
-silently ship. This repo has at least one real case — `carousel.tsx`
-`useEffect(..., [carouselRef.current])` violates `exhaustive-deps`. If you
-start maintaining this seriously, set it to `false` and run `pnpm lint`.
+### 3.2 `typescript.ignoreBuildErrors: false` (strict since 27 Sep 2026)
 
-### 3.2 `typescript.ignoreBuildErrors: true`
-
-`next build` skips `tsc`. Same v0 rationale, same trade-off: type errors
-(e.g. the unused `app-card.tsx` variant drifting out of sync) won't fail a
-build. For production hardening, set to `false` and fix what `tsc --noEmit`
-reports.
+`next build` runs `tsc`. Same story: flipping this to strict immediately
+caught a real type error — `CarouselProps.Icon` was `React.ElementType`
+while `AppCard` expected `LucideIcon` (fixed by tightening the prop type).
 
 ### 3.3 `images.unoptimized: true`
 
@@ -152,7 +153,7 @@ Standard Next.js 15 + React 19 config. The options that matter most:
 
 | Option | Value | Effect |
 |--------|-------|--------|
-| `strict` | `true` | Full strict type-checking (but see `ignoreBuildErrors` in §3.2 — builds skip it) |
+| `strict` | `true` | Full strict type-checking — and builds enforce it (§3.2) |
 | `jsx` | `"preserve"` | Next.js handles JSX transform; required for the App Router |
 | `moduleResolution` | `"bundler"` | Modern resolution for ESM/CJS interop |
 | `target` / `lib` | `ES6` / `dom, dom.iterable, esnext` | Baseline output; Next polyfills what it needs |
@@ -186,7 +187,7 @@ content: [
 ```
 
 - The last glob is what picks up the root-level components (`demo.tsx`,
-  `carousel.tsx`, `animated-toast.tsx`, `toast-context.tsx`, `app-card.tsx`,
+  `carousel.tsx`, `animated-toast.tsx`, `toast-context.tsx`,
   `carousel-card.tsx`). Don't delete it or those files lose their styles in
   production builds (Tailwind purges unused classes).
 
@@ -215,26 +216,23 @@ current UI (no accordion rendered).
 ## 6. `postcss.config.mjs`
 
 ```js
-export default {
+/** @type {import('postcss-load-config').Config} */
+const config = {
   plugins: {
     tailwindcss: {},
+    autoprefixer: {},
   },
 }
+
+export default config
 ```
 
-Only the Tailwind PostCSS plugin is registered. Two things to know:
-
-1. **`autoprefixer` is installed but NOT registered here.** Tailwind v3's own
-   docs recommend adding it (`autoprefixer: {}`). Without it, no vendor
-   prefixes are emitted (e.g. for `backdrop-blur`, `scroll-snap-type` on older
-   browsers). Add `autoprefixer: {}` to this file if you need wider browser
-   support.
-2. `app/globals.css` is the stylesheet actually imported (`app/layout.tsx`);
-   `styles/globals.css` (the shadcn variable file) is currently **not imported
-   anywhere** — the CSS variables it defines (`--background`, `--primary`, …)
-   therefore don't exist at runtime, and any `bg-background` / `text-primary`
-   classes would resolve to nothing. Either import it in the layout or move the
-   `:root` block into `app/globals.css`.
+Both plugins are registered. `autoprefixer` was added 27 Sep 2026 — it emits
+vendor prefixes (e.g. for `backdrop-blur`, `scroll-snap-type` on older
+browsers). `app/globals.css` is the stylesheet actually imported
+(`app/layout.tsx`); it now contains the `@tailwind` directives, the shadcn
+`:root`/`.dark` variables (merged from the deleted `styles/globals.css`),
+and the Figtree base styles.
 
 ---
 
@@ -295,10 +293,11 @@ only commented conventions). `.next/` (build output) and `out/`
 |------|--------------|
 | Add an env variable | `.env.local` (create from `.env.example`); add `NEXT_PUBLIC_` prefix for browser use |
 | Change dev/build/start scripts | `package.json` → `scripts` |
-| Re-enable lint/type checks in builds | `next.config.mjs` → set `ignoreDuringBuilds` / `ignoreBuildErrors` to `false` |
+| Lint/type checks in builds | `next.config.mjs` — enforced (strict since 27 Sep 2026) |
 | Add a path alias | `tsconfig.json` → `compilerOptions.paths` |
-| Change theme colors / radius | `styles/globals.css` (`:root` / `.dark`) **and** import it in `app/layout.tsx` (currently unimported!) |
+| Change theme colors / radius | `app/globals.css` → `:root` / `.dark` blocks |
 | Add Tailwind utilities / keyframes | `tailwind.config.ts` → `theme.extend` |
-| Add a PostCSS plugin (e.g. autoprefixer) | `postcss.config.mjs` |
+| Add a PostCSS plugin | `postcss.config.mjs` (tailwindcss + autoprefixer registered) |
+| Change lint rules | `eslint.config.mjs` |
 | Scaffold shadcn components | `components.json` controls output; run `pnpm dlx shadcn@latest add <name>` |
 | Pin the package manager | `package.json` → add `"packageManager": "pnpm@9.x"` |
